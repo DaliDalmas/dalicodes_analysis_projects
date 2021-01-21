@@ -14,7 +14,7 @@ from app import server
 from app import app
 
 
-app.title='Digest Africa Analytics'
+app.title='Dalicodes analytics'
 #server = app.server
 # import all pages in the app
 from apps import mps, home
