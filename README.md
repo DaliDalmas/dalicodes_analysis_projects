@@ -4,4 +4,6 @@ Building dashboards using python
 
 Youtube video : 
 
-Web Link : 
+Web Link : https://dalicodesanalytics.herokuapp.com/mps
+
+All rights researved to dalicodes

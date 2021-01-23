@@ -14,5 +14,5 @@ from app import app
 layout = html.Div([
     dbc.Container([
         dbc.Row([
-            dbc.Col(html.H6(children='Bring data to life.'), className="mb-4")
+            dbc.Col(html.H6(children='Living through data. All rights researved to dalicodes.'), className="mb-4")
         ])])])
