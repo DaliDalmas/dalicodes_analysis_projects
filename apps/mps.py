@@ -13,30 +13,21 @@ from app import app
 data = pd.read_csv("mps.csv")
 
 #data cleaning
+data = data.dropna()
+data['REGION'] = data['REGION'].apply(lambda x:str(x).lower())
 data["DISTRICT"] = data["DISTRICT"].apply(lambda x:str(x).lower())
 data["PARTY"] = data["PARTY"].apply(lambda x: str(x).split('/')[0])
-data = data.dropna()
 data["COMMENT"] = data["COMMENT"].apply(lambda x:str(x).lower())
+data = data.sort_values(by=['REGION','DISTRICT'])
 
-#transformations
-regions = ["all"]+list(data["REGION"].unique())
-districts = list(data["DISTRICT"].unique())
 
-# drop downs
-region_dropdown = dcc.Dropdown(
-        id='regions-dropdown',
-        options=[
-            {'label': reg, 'value': reg} for reg in regions
-            ],
-        value="all"
-    )
-district_dropdown = dcc.Dropdown(
-    id='districts-dropdown',
-    options=[
-        {'label': dist, 'value': dist} for dist in districts
-    ],
-    multi=True
-) 
+all_ptions_dict = {
+    reg: list(data["DISTRICT"][data["REGION"]==reg].unique()) for reg in data["REGION"].unique()
+}
+
+all_dict = {'all':['all']+list(data["DISTRICT"].unique())}
+all_options = dict(all_dict,**all_ptions_dict)
+
 
 layout = html.Div([
     dbc.Container([
@@ -117,12 +108,16 @@ layout = html.Div([
             dbc.Col([
                 html.H4("", className="card-title"),
                 html.H6("Regions", className="card-title"),
-                region_dropdown
+                dcc.Dropdown(
+                    id='regions-dropdown',
+                    options=[{'label': k, 'value': k} for k in all_options.keys()],
+                    value='all'
+                )
             ]),
             dbc.Col([
                 html.H4("", className="card-title"),
                 html.H6("Districts", className="card-title"),
-                district_dropdown
+                dcc.Dropdown(id='districts-dropdown',multi=True),
             ])
         ]),
         dbc.Row([
@@ -144,146 +139,206 @@ layout = html.Div([
 
 
 
+@app.callback(
+    dash.dependencies.Output('districts-dropdown', 'options'),
+    [dash.dependencies.Input('regions-dropdown', 'value')])
+def set_cities_options(selected_region):
+    if selected_region==None:
+        selected_region='all'
+    return [{'label': i, 'value': i} for i in all_options[selected_region]]
+
+@app.callback(
+    dash.dependencies.Output('districts-dropdown', 'value'),
+    [dash.dependencies.Input('districts-dropdown', 'options')])
+def set_cities_value(available_options):
+    return available_options[0]['value']
+
 
 @app.callback(
     Output('old_new', 'figure'),
-    Input('regions-dropdown', 'value'))
-
-def update_figure(region_value):
+    Input('regions-dropdown', 'value'),
+    Input('districts-dropdown', 'value'))
+def update_figure(region_value,district_values):
     condition = (region_value==None) or (region_value=='all')
     if condition:
         df = data
-        old_new_df = df[["CANDIDATE","COMMENT"]].groupby(["COMMENT"]).count().reset_index()
-        old_new = px.pie(old_new_df, values='CANDIDATE', names='COMMENT', title='Piechart comparing old and new mps.', hole=.5)
     else:
         df = data[data["REGION"]==region_value]
-        old_new_df = df[["CANDIDATE","COMMENT"]].groupby(["COMMENT"]).count().reset_index()
-        old_new = px.pie(old_new_df, values='CANDIDATE', names='COMMENT', title='Piechart comparing old and new mps.', hole=.5)
+
+    condition = (district_values==None) or ('all' in district_values) or (len(district_values)==0)
+    if condition:
+        df=df
+    else:
+        df = df[df["DISTRICT"].apply(lambda x: str(x) in district_values)]
+
+    
+
+    old_new_df = df[["CANDIDATE","COMMENT"]].groupby(["COMMENT"]).count().reset_index()
+    old_new = px.pie(old_new_df, values='CANDIDATE', names='COMMENT', title='Piechart comparing old and new mps.', hole=.5)
 
     return old_new
 
 
 @app.callback(
     Output('party', 'figure'),
-    Input('regions-dropdown', 'value'))
-
-def update_figure(region_value):
+    Input('regions-dropdown', 'value'),
+    Input('districts-dropdown', 'value'))
+def update_figure(region_value,district_values):
     condition = (region_value==None) or (region_value=='all')
     if condition:
         df = data
-        party_df = df[["PARTY","COMMENT","CANDIDATE"]].groupby(["PARTY","COMMENT"]).count().reset_index()
-        party_df = party_df.sort_values(by="COMMENT")
-        party = px.bar(party_df, x='PARTY', y='CANDIDATE',color="COMMENT", orientation='v',title='Mps by party split by comment.')
     else:
         df = data[data["REGION"]==region_value]
-        party_df = df[["PARTY","COMMENT","CANDIDATE"]].groupby(["PARTY","COMMENT"]).count().reset_index()
-        party_df = party_df.sort_values(by="COMMENT")
-        party = px.bar(party_df, x='PARTY', y='CANDIDATE',color="COMMENT", orientation='v',title='Mps by party split by comment.')
+
+    condition = (district_values==None) or ('all' in district_values) or (len(district_values)==0)
+    if condition:
+        df=df
+    else:
+        df = df[df["DISTRICT"].apply(lambda x: str(x) in district_values)]
+
+    
+
+    party_df = df[["PARTY","COMMENT","CANDIDATE"]].groupby(["PARTY","COMMENT"]).count().reset_index()
+    party_df = party_df.sort_values(by="CANDIDATE")
+    print(party_df)
+    party = px.bar(party_df, x='PARTY', y='CANDIDATE',color="COMMENT", orientation='v',title='Mps by party split by comment.')
     return party
 
 
 
 @app.callback(
     Output('datatable', 'children'),
-    Input('regions-dropdown', 'value'))
+    Input('regions-dropdown', 'value'),
+    Input('districts-dropdown', 'value'))
 
-def update_figure(region_value):
+def update_figure(region_value,district_values):
     condition = (region_value==None) or (region_value=='all')
     if condition:
-        datatable = dash_table.DataTable(
-                        id='table',
-                        columns =[{"name":i,"id":i} for i in data.columns],
-                        data = data.to_dict('records'),
-                        page_size=15,
-                        style_header={
-                            'backgroundColor':'black',
-                            'color':'white',
-                            'fontWeight':'bold'
-                        },
-                        style_data_conditional=[
-                            {'if':{'row_index':'odd'},
-                            'backgroundColor':'rbg(248,248,248)'}
-                        ]
-                    )
+        df=data
     else:
         df = data[data["REGION"]==region_value]
-        datatable = dash_table.DataTable(
-                        id='table',
-                        columns =[{"name":i,"id":i} for i in df.columns],
-                        data = df.to_dict('records'),
-                        page_size=15,
-                        style_header={
-                            'backgroundColor':'black',
-                            'color':'white',
-                            'fontWeight':'bold'
-                        },
-                        style_data_conditional=[
-                            {'if':{'row_index':'odd'},
-                            'backgroundColor':'rbg(248,248,248)'}
-                        ]
-                    )
+
+    condition = (district_values==None) or ('all' in district_values) or (len(district_values)==0)
+    if condition:
+        df=df
+    else:
+        df = df[df["DISTRICT"].apply(lambda x: str(x) in district_values)]
+
+    
+
+    datatable = dash_table.DataTable(
+                    id='table',
+                    columns =[{"name":i,"id":i} for i in df.columns],
+                    data = df.to_dict('records'),
+                    page_size=15,
+                    style_header={
+                        'backgroundColor':'black',
+                        'color':'white',
+                        'fontWeight':'bold'
+                    },
+                    style_data_conditional=[
+                        {'if':{'row_index':'odd'},
+                        'backgroundColor':'rbg(248,248,248)'}
+                    ]
+                )
     return datatable
 
 
 @app.callback(
     Output('CONSTITUENCIES', 'children'),
-    Input('regions-dropdown', 'value'))
+    Input('regions-dropdown', 'value'),
+    Input('districts-dropdown', 'value'))
 
-def update_figure(region_value):
+def update_figure(region_value,district_values):
     condition = (region_value==None) or (region_value=='all')
     if condition:
-        df = data
-        CONSTITUENCIES = len(list(df["CONSTITUENCY"][df["CONSTITUENCY"]!="WOMAN MP"].unique()))
+        df = data    
     else:
         df = data[data["REGION"]==region_value]
-        CONSTITUENCIES = len(list(df["CONSTITUENCY"][df["CONSTITUENCY"]!="WOMAN MP"].unique()))
+
+    condition = (district_values==None) or ('all' in district_values) or (len(district_values)==0)
+    if condition:
+        df=df
+    else:
+        df = df[df["DISTRICT"].apply(lambda x: str(x) in district_values)]
+
+    
+
+    CONSTITUENCIES = len(list(df["CONSTITUENCY"][df["CONSTITUENCY"]!="WOMAN MP"].unique()))
     return CONSTITUENCIES
 
 
 @app.callback(
     Output('NEWMPS', 'children'),
-    Input('regions-dropdown', 'value'))
+    Input('regions-dropdown', 'value'),
+    Input('districts-dropdown', 'value'))
 
-def update_figure(region_value):
+def update_figure(region_value,district_values):
+    condition = (district_values==None) or ('all' in district_values) or (len(district_values)==0)
+    if condition:
+        df=data
+    else:
+        df = data[data["DISTRICT"].apply(lambda x: str(x) in district_values)]
+
     condition = (region_value==None) or (region_value=='all')
     if condition:
-        df = data
-        NEWMPS = len(list(df["COMMENT"][df["COMMENT"]=="new"]))
+        df = df
     else:
-        df = data[data["REGION"]==region_value]
-        NEWMPS = len(list(df["COMMENT"][df["COMMENT"]=="new"]))
+        df = df[df["REGION"]==region_value]
+
+    NEWMPS = len(list(df["COMMENT"][df["COMMENT"]=="new"]))
+
     return NEWMPS
 
 
 
 @app.callback(
     Output('OLDMPS', 'children'),
-    Input('regions-dropdown', 'value'))
+    Input('regions-dropdown', 'value'),
+    Input('districts-dropdown', 'value'))
 
-def update_figure(region_value):
+def update_figure(region_value,district_values):
     condition = (region_value==None) or (region_value=='all')
     if condition:
         df = data
-        OLDMPS = len(list(df["COMMENT"][df["COMMENT"]=="old"]))
     else:
         df = data[data["REGION"]==region_value]
-        OLDMPS = len(list(df["COMMENT"][df["COMMENT"]=="old"]))
+
+    condition = (district_values==None) or ('all' in district_values) or (len(district_values)==0)
+    if condition:
+        df=df
+    else:
+        df = df[df["DISTRICT"].apply(lambda x: str(x) in district_values)]
+
+    
+
+    OLDMPS = len(list(df["COMMENT"][df["COMMENT"]=="old"]))
     return OLDMPS
 
 
 
 @app.callback(
     Output('WOMAN_MPS', 'children'),
-    Input('regions-dropdown', 'value'))
+    Input('regions-dropdown', 'value'),
+    Input('districts-dropdown', 'value'))
 
-def update_figure(region_value):
+def update_figure(region_value,district_values):
     condition = (region_value==None) or (region_value=='all')
     if condition:
         df = data
-        WOMAN_MPS = len(list(df["CONSTITUENCY"][df["CONSTITUENCY"]=="WOMAN MP"]))
     else:
         df = data[data["REGION"]==region_value]
-        WOMAN_MPS = len(list(df["CONSTITUENCY"][df["CONSTITUENCY"]=="WOMAN MP"]))
+
+    condition = (district_values==None) or ('all' in district_values) or (len(district_values)==0)
+    if condition:
+        df=df
+    else:
+        df = df[df["DISTRICT"].apply(lambda x: str(x) in district_values)]
+
+
+    
+    
+    WOMAN_MPS = len(list(df["CONSTITUENCY"][df["CONSTITUENCY"]=="WOMAN MP"]))
     return WOMAN_MPS
 
 
@@ -294,12 +349,21 @@ def update_figure(region_value):
     Input('districts-dropdown', 'value'))
 
 def update_figure(region_value,district_values):
-    print(district_values)
     condition = (region_value==None) or (region_value=='all')
     if condition:
         df = data
-        DISTRICTS = len(list(df["DISTRICT"].unique()))
     else:
         df = data[data["REGION"]==region_value]
-        DISTRICTS = len(list(df["DISTRICT"].unique()))
+
+    condition = (district_values==None) or ('all' in district_values) or (len(district_values)==0)
+    if condition:
+
+        df=df
+    else:
+        df = df[df["DISTRICT"].apply(lambda x: str(x) in district_values)]
+
+    
+        
+    
+    DISTRICTS = len(list(df["DISTRICT"].unique()))
     return DISTRICTS
