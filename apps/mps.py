@@ -200,7 +200,7 @@ def update_figure(region_value,district_values):
 
     party_df = df[["PARTY","COMMENT","CANDIDATE"]].groupby(["PARTY","COMMENT"]).count().reset_index()
     party_df = party_df.sort_values(by="CANDIDATE")
-    print(party_df)
+   
     party = px.bar(party_df, x='PARTY', y='CANDIDATE',color="COMMENT", orientation='v',title='Mps by party split by comment.')
     return party
 

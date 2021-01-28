@@ -17,18 +17,20 @@ from app import app
 app.title='Dalicodes analytics'
 #server = app.server
 # import all pages in the app
-from apps import mps, home
+from apps import mps, home, ugbudget
 
 
 
 
 structuredDropdown = dbc.DropdownMenu(
     children=[
-        dbc.DropdownMenuItem("Ugandan Mps 2020", href="/mps")
+        dbc.DropdownMenuItem("Ugandan Budget", href="/budgets"),
+        dbc.DropdownMenuItem("Ugandan Mps 2020", href="/mps"),
+        
     ],
     nav = True,
     in_navbar = True,
-    label = "set one",
+    label = "Uganda",
 )
 navbar = dbc.Navbar(
     dbc.Container(
@@ -86,8 +88,10 @@ app.layout = html.Div([
 def display_page(pathname):
     if pathname == '/mps':
         return mps.layout
+    if pathname == '/budgets':
+        return ugbudget.layout
     else:
         return home.layout
 
 if __name__ == '__main__':
-    app.run_server(debug=False)
+    app.run_server(debug=True)
